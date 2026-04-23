@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Briefcase, BookOpen, CheckCircle2, TrendingUp, Zap } from 'lucide-react'
+import { Plus, Briefcase, CheckCircle2, TrendingUp, Zap } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useApp } from '../hooks/useApp'
 import { projectsAPI } from '../services/api'
@@ -15,16 +15,9 @@ export const Dashboard = () => {
   const navigate = useNavigate()
   const { projects, setProjects, showSuccess, showError, setLoading, loading } = useApp()
   const [showProjectModal, setShowProjectModal] = useState(false)
-  const [stats, setStats] = useState({ total: 0, active: 0, completed: 0 })
   const [loadError, setLoadError] = useState('')
 
-  useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  useEffect(() => {
-    calculateStats()
-  }, [projects])
+  useEffect(() => { fetchProjects() }, [])
 
   const fetchProjects = async () => {
     try {
@@ -41,14 +34,6 @@ export const Dashboard = () => {
     }
   }
 
-  const calculateStats = () => {
-    setStats({
-      total: projects.length,
-      active: projects.filter(p => p.status !== 'done').length,
-      completed: projects.filter(p => p.status === 'done').length,
-    })
-  }
-
   const handleCreateProject = async (formData) => {
     try {
       setLoading(true)
@@ -61,6 +46,15 @@ export const Dashboard = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Derive stats from the isCompleted flag returned by the API
+  const completedProjects = projects.filter(p => p.isCompleted)
+  const activeProjects = projects.filter(p => !p.isCompleted)
+  const stats = {
+    total: projects.length,
+    active: activeProjects.length,
+    completed: completedProjects.length,
   }
 
   const StatCard = ({ icon: Icon, label, value, color, trend }) => (
@@ -77,26 +71,19 @@ export const Dashboard = () => {
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</p>
               <div className="flex items-baseline gap-2 mt-2">
                 <p className="text-4xl font-bold text-gray-900 dark:text-white">{value}</p>
-                {trend && (
+                {trend > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
-                      trend > 0 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    }`}
+                    className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                   >
                     <TrendingUp className="w-3 h-3" />
-                    {Math.abs(trend)}%
+                    {trend}%
                   </motion.span>
                 )}
               </div>
             </div>
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              className={`p-3 rounded-lg ${color}`}
-            >
+            <motion.div whileHover={{ scale: 1.1, rotate: 5 }} className={`p-3 rounded-lg ${color}`}>
               <Icon className="w-6 h-6 text-white" />
             </motion.div>
           </div>
@@ -107,20 +94,20 @@ export const Dashboard = () => {
 
   return (
     <motion.div className="space-y-8">
-      {/* Hero Section */}
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
           {loadError}
         </div>
       )}
 
+      {/* Hero */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-900 dark:to-blue-800 rounded-2xl p-8 text-white shadow-lg"
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white opacity-5 rounded-full -mr-48 -mt-48"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white opacity-5 rounded-full -mr-48 -mt-48" />
         <div className="relative z-10">
           <h1 className="text-4xl font-bold mb-2">Welcome back!</h1>
           <p className="text-blue-100 mb-6">Track your projects and stay on top of your team's work</p>
@@ -135,18 +122,13 @@ export const Dashboard = () => {
         </div>
       </motion.div>
 
-      {/* Stats Grid */}
+      {/* Stats */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Overview</h2>
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.1 }}
-              >
+              <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }}>
                 <CardSkeleton />
               </motion.div>
             ))}
@@ -178,7 +160,7 @@ export const Dashboard = () => {
         )}
       </div>
 
-      {/* Projects Section */}
+      {/* Projects list */}
       <div>
         <motion.div
           initial={{ opacity: 0 }}
@@ -192,9 +174,7 @@ export const Dashboard = () => {
               {projects.length} {projects.length === 1 ? 'project' : 'projects'} in total
             </p>
           </div>
-          <Button icon={Plus} onClick={() => setShowProjectModal(true)}>
-            New Project
-          </Button>
+          <Button icon={Plus} onClick={() => setShowProjectModal(true)}>New Project</Button>
         </motion.div>
 
         {loading ? (
@@ -211,7 +191,7 @@ export const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence>
-              {projects?.map((project, index) => (
+              {projects.map((project, index) => (
                 <motion.div
                   key={project.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -222,46 +202,74 @@ export const Dashboard = () => {
                   onClick={() => navigate(`/projects/${project.id}`)}
                   className="cursor-pointer group"
                 >
-                  <Card hoverable className="h-full flex flex-col">
+                  <Card hoverable className={`h-full flex flex-col ${project.isCompleted ? 'border-green-300 dark:border-green-700' : ''}`}>
                     <CardBody className="flex flex-col h-full">
-                      {/* Project Header */}
+                      {/* Header */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          <h3 className={`font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
+                            project.isCompleted
+                              ? 'text-gray-500 dark:text-gray-400'
+                              : 'text-gray-900 dark:text-white'
+                          }`}>
                             {project.name}
                           </h3>
                         </div>
-                        <div className="ml-2 p-2 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg">
-                          <Briefcase className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <div className={`ml-2 p-2 rounded-lg ${
+                          project.isCompleted
+                            ? 'bg-green-100 dark:bg-green-900/30'
+                            : 'bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30'
+                        }`}>
+                          {project.isCompleted
+                            ? <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                            : <Briefcase className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          }
                         </div>
                       </div>
+
+                      {/* Completed badge */}
+                      {project.isCompleted && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full mb-3 w-fit">
+                          <CheckCircle2 className="w-3 h-3" /> Completed
+                        </span>
+                      )}
 
                       {/* Description */}
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2 flex-1">
                         {project.description || 'No description'}
                       </p>
 
-                      {/* Progress Bar */}
-                      {project.progress !== undefined && (
+                      {/* Progress bar — % of Done stories */}
+                      {project.userStoriesCount > 0 && (
                         <div className="mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Progress</span>
-                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{project.progress}%</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Stories done</span>
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                              {Math.round(
+                                ((project.userStories?.filter(s => s.status === 'Done').length || 0) /
+                                  project.userStoriesCount) * 100
+                              )}%
+                            </span>
                           </div>
                           <div className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
-                              animate={{ width: `${project.progress}%` }}
+                              animate={{
+                                width: `${Math.round(
+                                  ((project.userStories?.filter(s => s.status === 'Done').length || 0) /
+                                    project.userStoriesCount) * 100
+                                )}%`,
+                              }}
                               transition={{ delay: 0.5, duration: 1 }}
-                              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600"
+                              className={`h-full ${project.isCompleted ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-indigo-600'}`}
                             />
                           </div>
                         </div>
                       )}
 
-                      {/* Meta Info */}
+                      {/* Meta */}
                       <div className="pt-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <span>{project.userStoriesCount || project.userStories?.length || 0} user stories</span>
+                        <span>{project.userStoriesCount || 0} user stories</span>
                         <span>{project.tasksCount || 0} tasks</span>
                       </div>
                     </CardBody>
@@ -273,18 +281,8 @@ export const Dashboard = () => {
         )}
       </div>
 
-      {/* Create Project Modal */}
-      <Modal
-        isOpen={showProjectModal}
-        onClose={() => setShowProjectModal(false)}
-        title="Create New Project"
-        size="lg"
-      >
-        <ProjectForm
-          onSubmit={handleCreateProject}
-          onCancel={() => setShowProjectModal(false)}
-          isLoading={loading}
-        />
+      <Modal isOpen={showProjectModal} onClose={() => setShowProjectModal(false)} title="Create New Project" size="lg">
+        <ProjectForm onSubmit={handleCreateProject} onCancel={() => setShowProjectModal(false)} isLoading={loading} />
       </Modal>
     </motion.div>
   )
