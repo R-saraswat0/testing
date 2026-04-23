@@ -7,7 +7,7 @@ import {
   validateProjectUpdate,
 } from '../utils/validators.js'
 
-const buildPaginationMeta = (page, limit, total) => ({
+const buildPagination = (page, limit, total) => ({
   page,
   limit,
   total,
@@ -69,9 +69,8 @@ export const getAllProjects = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Projects retrieved successfully',
       data,
-      meta: buildPaginationMeta(page, limit, total),
+      pagination: buildPagination(page, limit, total),
     })
   } catch (error) {
     next(error)
@@ -119,9 +118,8 @@ export const getProjectStories = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'User stories retrieved successfully',
       data: stories,
-      meta: buildPaginationMeta(page, limit, total),
+      pagination: buildPagination(page, limit, total),
     })
   } catch (error) {
     next(error)
@@ -154,7 +152,6 @@ export const getProjectById = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Project retrieved successfully',
       data: project,
     })
   } catch (error) {

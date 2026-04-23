@@ -114,7 +114,8 @@ api.interceptors.response.use(
       return {
         ...response,
         data: response.data.data,
-        meta: response.data.meta,
+        meta: response.data.meta || response.data.pagination,
+        pagination: response.data.pagination,
         message: response.data.message,
       }
     }

@@ -7,7 +7,7 @@ import {
   validateTaskUpdate,
 } from '../utils/validators.js'
 
-const buildPaginationMeta = (page, limit, total) => ({
+const buildPagination = (page, limit, total) => ({
   page,
   limit,
   total,
@@ -91,9 +91,8 @@ export const getTasksByStory = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Tasks retrieved successfully',
       data: tasks,
-      meta: buildPaginationMeta(page, limit, total),
+      pagination: buildPagination(page, limit, total),
     })
   } catch (error) {
     next(error)

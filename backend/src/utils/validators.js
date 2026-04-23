@@ -4,6 +4,13 @@ import { AppError } from '../middlewares/errorHandler.js'
 export const STATUS_VALUES = ['Todo', 'In Progress', 'Done']
 export const PRIORITY_VALUES = ['Low', 'Medium', 'High']
 
+const STATUS_QUERY_VALUES = ['todo', 'in-progress', 'done']
+const STATUS_QUERY_TO_DB = {
+  todo: 'Todo',
+  'in-progress': 'In Progress',
+  done: 'Done',
+}
+
 const validationOptions = {
   abortEarly: false,
   stripUnknown: true,
@@ -123,11 +130,18 @@ export const validateListQuery = (query, options = {}) => {
     limit: Joi.number().integer().min(1).max(100).default(20),
     projectId: Joi.number().integer().positive().optional(),
     storyId: Joi.number().integer().positive().optional(),
-    status: options.allowStatus ? Joi.string().valid(...STATUS_VALUES).optional() : Joi.forbidden(),
+    status: options.allowStatus ? Joi.string().lowercase().valid(...STATUS_QUERY_VALUES).optional() : Joi.forbidden(),
     priority: options.allowPriority ? Joi.string().valid(...PRIORITY_VALUES).optional() : Joi.forbidden(),
+    sort: Joi.string().valid('createdAt', 'updatedAt').optional(),
     sortBy: Joi.string().valid('createdAt', 'updatedAt').default('createdAt'),
     sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
   })
 
-  return validateWithSchema(schema, query)
+  const value = validateWithSchema(schema, query)
+
+  return {
+    ...value,
+    status: value.status ? STATUS_QUERY_TO_DB[value.status] : undefined,
+    sortBy: value.sort || value.sortBy,
+  }
 }

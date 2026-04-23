@@ -89,14 +89,9 @@ router.get('/', userStoryController.getUserStoriesByProject)
  *         name: status
  *         schema:
  *           type: string
- *           enum: [Todo, In Progress, Done]
+ *           enum: [todo, in-progress, done]
  *       - in: query
- *         name: priority
- *         schema:
- *           type: string
- *           enum: [Low, Medium, High]
- *       - in: query
- *         name: sortBy
+ *         name: sort
  *         schema:
  *           type: string
  *           enum: [createdAt, updatedAt]
