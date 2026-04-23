@@ -68,6 +68,9 @@ export const generateDailyReport = async () => {
   }
 }
 
+// The assignment calls for a simple async workflow without external queues.
+// This retry loop handles transient database/runtime failures locally and
+// leaves a clear log trail for each attempt.
 const runWithRetry = async (work, attempts = REPORT_RETRY_ATTEMPTS) => {
   let lastError
 
@@ -90,6 +93,8 @@ const runWithRetry = async (work, attempts = REPORT_RETRY_ATTEMPTS) => {
 /**
  * Background job that runs daily at midnight.
  * It summarizes completed work and logs the generated report.
+ * If all retry attempts fail, the API server keeps running and the error is
+ * captured in logs for operational follow-up.
  */
 export const startDailyReportJob = () => {
   const job = cron.schedule('0 0 * * *', async () => {

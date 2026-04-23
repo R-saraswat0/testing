@@ -26,6 +26,7 @@ export const ProjectDetails = () => {
   const [tasks, setTasks] = useState({})
   const [expandedStories, setExpandedStories] = useState(new Set())
   const [viewMode, setViewMode] = useState('list') // 'list' or 'kanban'
+  const [loadError, setLoadError] = useState('')
 
   // Modals
   const [showProjectModal, setShowProjectModal] = useState(false)
@@ -43,9 +44,10 @@ export const ProjectDetails = () => {
   const fetchProjectData = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const [projectRes, storiesRes] = await Promise.all([
         projectsAPI.getById(projectId),
-        userStoriesAPI.getByProject(projectId),
+        projectsAPI.getStories(projectId),
       ])
       setProject(projectRes.data)
       setStories(storiesRes.data || [])
@@ -54,14 +56,16 @@ export const ProjectDetails = () => {
       const allTasks = {}
       await Promise.all(
         (storiesRes.data || []).map(story =>
-          tasksAPI.getByStory(story.id)
+          userStoriesAPI.getTasks(story.id)
             .then(res => { allTasks[story.id] = res.data || [] })
             .catch(() => { allTasks[story.id] = [] })
         )
       )
       setTasks(allTasks)
     } catch (error) {
-      showError('Failed to load project')
+      const message = error.response?.data?.message || 'Failed to load project'
+      setLoadError(message)
+      showError(message)
     } finally {
       setLoading(false)
     }
@@ -75,7 +79,7 @@ export const ProjectDetails = () => {
       setShowProjectModal(false)
       fetchProjectData()
     } catch (error) {
-      showError('Failed to update project')
+      showError(error.response?.data?.message || 'Failed to update project')
     } finally {
       setLoading(false)
     }
@@ -89,7 +93,7 @@ export const ProjectDetails = () => {
         showSuccess('Project deleted successfully!')
         navigate('/')
       } catch (error) {
-        showError('Failed to delete project')
+        showError(error.response?.data?.message || 'Failed to delete project')
       } finally {
         setLoading(false)
       }
@@ -104,7 +108,7 @@ export const ProjectDetails = () => {
       setShowStoryModal(false)
       fetchProjectData()
     } catch (error) {
-      showError('Failed to create story')
+      showError(error.response?.data?.message || 'Failed to create story')
     } finally {
       setLoading(false)
     }
@@ -119,7 +123,7 @@ export const ProjectDetails = () => {
       setEditingStory(null)
       fetchProjectData()
     } catch (error) {
-      showError('Failed to update story')
+      showError(error.response?.data?.message || 'Failed to update story')
     } finally {
       setLoading(false)
     }
@@ -133,7 +137,7 @@ export const ProjectDetails = () => {
         showSuccess('Story deleted!')
         fetchProjectData()
       } catch (error) {
-        showError('Failed to delete story')
+        showError(error.response?.data?.message || 'Failed to delete story')
       } finally {
         setLoading(false)
       }
@@ -148,7 +152,7 @@ export const ProjectDetails = () => {
       setShowTaskModal(false)
       fetchProjectData()
     } catch (error) {
-      showError('Failed to create task')
+      showError(error.response?.data?.message || 'Failed to create task')
     } finally {
       setLoading(false)
     }
@@ -163,7 +167,7 @@ export const ProjectDetails = () => {
       setEditingTask(null)
       fetchProjectData()
     } catch (error) {
-      showError('Failed to update task')
+      showError(error.response?.data?.message || 'Failed to update task')
     } finally {
       setLoading(false)
     }
@@ -177,7 +181,7 @@ export const ProjectDetails = () => {
         showSuccess('Task deleted!')
         fetchProjectData()
       } catch (error) {
-        showError('Failed to delete task')
+        showError(error.response?.data?.message || 'Failed to delete task')
       } finally {
         setLoading(false)
       }
@@ -192,6 +196,17 @@ export const ProjectDetails = () => {
       newExpanded.add(storyId)
     }
     setExpandedStories(newExpanded)
+  }
+
+  const handleTaskStatusChange = async (taskId, status) => {
+    try {
+      await tasksAPI.update(taskId, { status })
+      showSuccess('Task status updated')
+      fetchProjectData()
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to update task status')
+      throw error
+    }
   }
 
   if (!project) {
@@ -218,19 +233,25 @@ export const ProjectDetails = () => {
   // Calculate stats
   const totalStories = stories.length
   const totalTasks = Object.values(tasks).reduce((sum, arr) => sum + (arr?.length || 0), 0)
-  const completedStories = stories.filter(s => s.status === 'done').length
-  const inProgressStories = stories.filter(s => s.status === 'in-progress').length
+  const completedStories = stories.filter(s => s.status === 'Done').length
+  const inProgressStories = stories.filter(s => s.status === 'In Progress').length
 
   // Prepare tasks for Kanban view
   const kanbanTasks = {
-    todo: Object.values(tasks).flat().filter(t => t.status === 'todo'),
-    'in-progress': Object.values(tasks).flat().filter(t => t.status === 'in-progress'),
-    done: Object.values(tasks).flat().filter(t => t.status === 'done'),
+    todo: Object.values(tasks).flat().filter(t => t.status === 'Todo'),
+    'in-progress': Object.values(tasks).flat().filter(t => t.status === 'In Progress'),
+    done: Object.values(tasks).flat().filter(t => t.status === 'Done'),
   }
 
   return (
     <motion.div className="space-y-6">
       {/* Header with Back Button */}
+      {loadError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+          {loadError}
+        </div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -477,11 +498,11 @@ export const ProjectDetails = () => {
                                               <p className="font-medium text-gray-900 dark:text-white">{task.title}</p>
                                               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{task.description}</p>
                                               <div className="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                                {task.assigned_to && (
-                                                  <span>👤 {task.assigned_to}</span>
+                                                {task.assignedTo && (
+                                                  <span>{task.assignedTo}</span>
                                                 )}
-                                                {task.due_date && (
-                                                  <span>📅 {format(new Date(task.due_date), 'MMM d')}</span>
+                                                {task.dueDate && (
+                                                  <span>{format(new Date(task.dueDate), 'MMM d')}</span>
                                                 )}
                                               </div>
                                             </div>
@@ -537,7 +558,7 @@ export const ProjectDetails = () => {
                 size="md"
               />
             ) : (
-              <KanbanBoard tasks={kanbanTasks} />
+              <KanbanBoard tasks={kanbanTasks} onTaskStatusChange={handleTaskStatusChange} />
             )}
           </div>
         )}

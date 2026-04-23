@@ -67,6 +67,47 @@ router.get('/', userStoryController.getUserStoriesByProject)
 
 /**
  * @swagger
+ * /stories/{id}/tasks:
+ *   get:
+ *     summary: Get tasks for a user story
+ *     tags: [User Stories]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Todo, In Progress, Done]
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           type: string
+ *           enum: [Low, Medium, High]
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, updatedAt]
+ *     responses:
+ *       200:
+ *         description: Tasks for the user story
+ */
+router.get('/:id/tasks', userStoryController.getStoryTasks)
+
+/**
+ * @swagger
  * /user-stories/{id}:
  *   patch:
  *     summary: Update user story
@@ -101,6 +142,7 @@ router.get('/', userStoryController.getUserStoriesByProject)
  *         description: User story not found
  */
 router.patch('/:id', userStoryController.updateUserStory)
+router.put('/:id', userStoryController.updateUserStory)
 
 /**
  * @swagger

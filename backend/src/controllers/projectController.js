@@ -1,6 +1,18 @@
 import prisma from '../utils/db.js'
 import { AppError } from '../middlewares/errorHandler.js'
-import { validateProject, validateId } from '../utils/validators.js'
+import {
+  validateId,
+  validateListQuery,
+  validateProject,
+  validateProjectUpdate,
+} from '../utils/validators.js'
+
+const buildPaginationMeta = (page, limit, total) => ({
+  page,
+  limit,
+  total,
+  totalPages: Math.ceil(total / limit),
+})
 
 /**
  * Create a new project
@@ -30,22 +42,86 @@ export const createProject = async (req, res, next) => {
  */
 export const getAllProjects = async (req, res, next) => {
   try {
-    const projects = await prisma.project.findMany({
-      include: {
-        userStories: {
-          include: {
-            tasks: true,
+    const { page, limit, sortBy, sortOrder } = validateListQuery(req.query)
+    const skip = (page - 1) * limit
+
+    const [projects, total] = await Promise.all([
+      prisma.project.findMany({
+        skip,
+        take: limit,
+        include: {
+          userStories: {
+            include: {
+              tasks: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      prisma.project.count(),
+    ])
+
+    const data = projects.map(project => ({
+      ...project,
+      userStoriesCount: project.userStories.length,
+      tasksCount: project.userStories.reduce((sum, story) => sum + story.tasks.length, 0),
+    }))
 
     res.status(200).json({
       success: true,
       message: 'Projects retrieved successfully',
-      data: projects,
-      count: projects.length,
+      data,
+      meta: buildPaginationMeta(page, limit, total),
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Get user stories for a project
+ * GET /projects/:id/stories
+ */
+export const getProjectStories = async (req, res, next) => {
+  try {
+    const projectId = validateId(parseInt(req.params.id))
+    const { page, limit, status, priority, sortBy, sortOrder } = validateListQuery(req.query, {
+      allowStatus: true,
+      allowPriority: true,
+    })
+    const skip = (page - 1) * limit
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    })
+
+    if (!project) {
+      throw new AppError('Project not found', 404)
+    }
+
+    const where = {
+      projectId,
+      ...(status && { status }),
+      ...(priority && { priority }),
+    }
+
+    const [stories, total] = await Promise.all([
+      prisma.userStory.findMany({
+        where,
+        skip,
+        take: limit,
+        include: { tasks: true },
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      prisma.userStory.count({ where }),
+    ])
+
+    res.status(200).json({
+      success: true,
+      message: 'User stories retrieved successfully',
+      data: stories,
+      meta: buildPaginationMeta(page, limit, total),
     })
   } catch (error) {
     next(error)
@@ -61,7 +137,6 @@ export const getProjectById = async (req, res, next) => {
     const id = validateId(parseInt(req.params.id))
 
     const project = await prisma.project.findUnique({
-      where: { id },
       include: {
         userStories: {
           include: {
@@ -70,6 +145,7 @@ export const getProjectById = async (req, res, next) => {
           orderBy: { createdAt: 'desc' },
         },
       },
+      where: { id },
     })
 
     if (!project) {
@@ -93,7 +169,7 @@ export const getProjectById = async (req, res, next) => {
 export const updateProject = async (req, res, next) => {
   try {
     const id = validateId(parseInt(req.params.id))
-    const validatedData = validateProject(req.body)
+    const validatedData = validateProjectUpdate(req.body)
 
     const project = await prisma.project.update({
       where: { id },

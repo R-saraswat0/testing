@@ -16,6 +16,7 @@ export const Dashboard = () => {
   const { projects, setProjects, showSuccess, showError, setLoading, loading } = useApp()
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0 })
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     fetchProjects()
@@ -28,10 +29,13 @@ export const Dashboard = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const response = await projectsAPI.getAll()
       setProjects(response.data || [])
     } catch (error) {
-      showError('Failed to load projects')
+      const message = error.response?.data?.message || 'Failed to load projects'
+      setLoadError(message)
+      showError(message)
     } finally {
       setLoading(false)
     }
@@ -104,6 +108,12 @@ export const Dashboard = () => {
   return (
     <motion.div className="space-y-8">
       {/* Hero Section */}
+      {loadError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+          {loadError}
+        </div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -251,8 +261,8 @@ export const Dashboard = () => {
 
                       {/* Meta Info */}
                       <div className="pt-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <span>{project.user_stories_count || 0} user stories</span>
-                        <span>{project.tasks_count || 0} tasks</span>
+                        <span>{project.userStoriesCount || project.userStories?.length || 0} user stories</span>
+                        <span>{project.tasksCount || 0} tasks</span>
                       </div>
                     </CardBody>
                   </Card>

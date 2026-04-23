@@ -127,22 +127,24 @@ Projects:
 - `POST /projects`
 - `GET /projects`
 - `GET /projects/:id`
-- `PATCH /projects/:id`
+- `GET /projects/:id/stories`
+- `PATCH` / `PUT /projects/:id`
 - `DELETE /projects/:id`
 
 User Stories:
 - `POST /user-stories`
 - `GET /user-stories?projectId=:projectId`
-- `PATCH /user-stories/:id`
+- `GET /stories/:id/tasks`
+- `PATCH` / `PUT /user-stories/:id`
 - `DELETE /user-stories/:id`
 
 Tasks:
 - `POST /tasks`
 - `GET /tasks?storyId=:storyId`
-- `PATCH /tasks/:id`
+- `PATCH` / `PUT /tasks/:id`
 - `DELETE /tasks/:id`
 
-Additional API notes are in [BACKEND_API_INTEGRATION.md](./BACKEND_API_INTEGRATION.md).
+List endpoints support `page`, `limit`, `status`, `priority`, `sortBy`, and `sortOrder` where applicable. Additional API notes are in [BACKEND_API_INTEGRATION.md](./BACKEND_API_INTEGRATION.md).
 
 ## Background Workflow
 

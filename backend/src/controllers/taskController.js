@@ -1,6 +1,18 @@
 import prisma from '../utils/db.js'
 import { AppError } from '../middlewares/errorHandler.js'
-import { validateTask, validateId } from '../utils/validators.js'
+import {
+  validateId,
+  validateListQuery,
+  validateTask,
+  validateTaskUpdate,
+} from '../utils/validators.js'
+
+const buildPaginationMeta = (page, limit, total) => ({
+  page,
+  limit,
+  total,
+  totalPages: Math.ceil(total / limit),
+})
 
 /**
  * Create a new task
@@ -42,6 +54,11 @@ export const getTasksByStory = async (req, res, next) => {
     const storyId = req.query.storyId
       ? validateId(parseInt(req.query.storyId))
       : null
+    const { page, limit, status, priority, sortBy, sortOrder } = validateListQuery(req.query, {
+      allowStatus: true,
+      allowPriority: true,
+    })
+    const skip = (page - 1) * limit
 
     if (!storyId) {
       throw new AppError('storyId query parameter is required', 400)
@@ -56,16 +73,27 @@ export const getTasksByStory = async (req, res, next) => {
       throw new AppError('User story not found', 404)
     }
 
-    const tasks = await prisma.task.findMany({
-      where: { userStoryId: storyId },
-      orderBy: { createdAt: 'desc' },
-    })
+    const where = {
+      userStoryId: storyId,
+      ...(status && { status }),
+      ...(priority && { priority }),
+    }
+
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      prisma.task.count({ where }),
+    ])
 
     res.status(200).json({
       success: true,
       message: 'Tasks retrieved successfully',
       data: tasks,
-      count: tasks.length,
+      meta: buildPaginationMeta(page, limit, total),
     })
   } catch (error) {
     next(error)
@@ -79,20 +107,7 @@ export const getTasksByStory = async (req, res, next) => {
 export const updateTask = async (req, res, next) => {
   try {
     const id = validateId(parseInt(req.params.id))
-
-    // Only allow updating specific fields
-    const updateData = {}
-    const allowedFields = ['title', 'description', 'status', 'priority', 'assignedTo', 'dueDate']
-    
-    for (const field of allowedFields) {
-      if (field in req.body) {
-        updateData[field] = req.body[field]
-      }
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      throw new AppError('At least one field must be provided', 400)
-    }
+    const updateData = validateTaskUpdate(req.body)
 
     const task = await prisma.task.update({
       where: { id },

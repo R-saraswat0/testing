@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { FormGroup, Input, TextArea, Select } from './FormElements'
 import { Button, SecondaryButton } from './Button'
 
+const formatDateInput = (value) => {
+  if (!value) return ''
+  return value.includes('T') ? value.split('T')[0] : value
+}
+
 export const TaskForm = ({ initialData, onSubmit, onCancel, isLoading = false }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -16,7 +21,11 @@ export const TaskForm = ({ initialData, onSubmit, onCancel, isLoading = false })
 
   useEffect(() => {
     if (initialData) {
-      setFormData(prev => ({ ...prev, ...initialData }))
+      setFormData(prev => ({
+        ...prev,
+        ...initialData,
+        dueDate: formatDateInput(initialData.dueDate),
+      }))
     }
   }, [initialData])
 
@@ -39,7 +48,10 @@ export const TaskForm = ({ initialData, onSubmit, onCancel, isLoading = false })
   const handleSubmit = (e) => {
     e.preventDefault()
     if (validate()) {
-      onSubmit(formData)
+      onSubmit({
+        ...formData,
+        dueDate: formData.dueDate || null,
+      })
     }
   }
 

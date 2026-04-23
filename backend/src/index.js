@@ -17,6 +17,7 @@ import { errorHandler } from './middlewares/errorHandler.js'
 import { authMiddleware } from './middlewares/auth.js'
 import { requestLogger } from './utils/logger.js'
 import rateLimiter from './middlewares/rateLimiter.js'
+import sanitizeInput from './middlewares/sanitize.js'
 
 // Import background jobs
 import './jobs/dailyReport.js'
@@ -106,6 +107,7 @@ app.use(cors({
 }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.use(sanitizeInput)
 app.use(morgan('combined'))
 app.use(requestLogger)
 app.use(rateLimiter)
@@ -131,6 +133,7 @@ app.use('/auth', authRoutes)
 // Protected routes (authentication required)
 app.use('/projects', authMiddleware, projectRoutes)
 app.use('/user-stories', authMiddleware, userStoryRoutes)
+app.use('/stories', authMiddleware, userStoryRoutes)
 app.use('/tasks', authMiddleware, taskRoutes)
 
 // ==================== ERROR HANDLING ====================

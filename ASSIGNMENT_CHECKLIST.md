@@ -27,8 +27,6 @@ These are not strictly required by the assignment but are present:
 - Dark mode
 - Framer Motion animations
 - dnd-kit drag and drop Kanban board
-
-
 - Toast notifications
 - Skeleton loaders
 - Swagger UI
@@ -36,9 +34,6 @@ These are not strictly required by the assignment but are present:
 - Morgan HTTP logging
 - Helmet security headers
 - Rate limiting
-- Frontend design system documentation
-- Deployment documentation
-- Multiple generated frontend summary/reference documents
 
 ## Known Scope Tradeoffs
 
@@ -46,4 +41,3 @@ These are not strictly required by the assignment but are present:
 - Task assignee is a text field, not a foreign key to a team member.
 - Daily reports are logged, not stored in a dedicated database table.
 - Automated tests are not currently present.
-

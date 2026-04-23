@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   DndContext,
   closestCorners,
@@ -19,9 +19,19 @@ import { GripVertical, Plus, User } from 'lucide-react'
 import { KanbanColumn } from './KanbanColumn'
 import { KanbanTask } from './KanbanTask'
 
-export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] } }) => {
+const statusByColumn = {
+  todo: 'Todo',
+  'in-progress': 'In Progress',
+  done: 'Done',
+}
+
+export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] }, onTaskStatusChange }) => {
   const [items, setItems] = useState(tasks)
   const [activeId, setActiveId] = useState(null)
+
+  useEffect(() => {
+    setItems(tasks)
+  }, [tasks])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -71,10 +81,17 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] } 
           [activeStatus]: arrayMove(items[activeStatus], activeIndex, overIndex),
         })
       } else {
+        const previousItems = items
         const newItems = JSON.parse(JSON.stringify(items))
         const [movedItem] = newItems[activeStatus].splice(activeIndex, 1)
+        movedItem.status = statusByColumn[overStatus]
         newItems[overStatus].splice(overIndex, 0, movedItem)
         setItems(newItems)
+
+        if (onTaskStatusChange) {
+          onTaskStatusChange(movedItem.id, statusByColumn[overStatus])
+            .catch(() => setItems(previousItems))
+        }
       }
     }
 

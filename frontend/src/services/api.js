@@ -36,10 +36,13 @@ api.interceptors.request.use(
 // ==================== Projects ====================
 export const projectsAPI = {
   // Get all projects with nested user stories and tasks
-  getAll: () => api.get('/projects'),
+  getAll: (params) => api.get('/projects', { params }),
   
   // Get project by ID with user stories and tasks
   getById: (id) => api.get(`/projects/${id}`),
+
+  // Get stories under a project
+  getStories: (id, params) => api.get(`/projects/${id}/stories`, { params }),
   
   // Create new project
   create: (data) => api.post('/projects', data),
@@ -61,7 +64,17 @@ export const authAPI = {
 // ==================== User Stories ====================
 export const userStoriesAPI = {
   // Get user stories by project ID
-  getByProject: (projectId) => api.get('/user-stories', {
+  getByProject: (projectId, params) => api.get('/user-stories', {
+    params: { projectId, ...params },
+  }),
+
+  // Get tasks under a story
+  getTasks: (id, params) => api.get(`/stories/${id}/tasks`, {
+    params,
+  }),
+
+  // Legacy flat endpoint
+  getByProjectLegacy: (projectId) => api.get('/user-stories', {
     params: { projectId },
   }),
   
@@ -78,8 +91,8 @@ export const userStoriesAPI = {
 // ==================== Tasks ====================
 export const tasksAPI = {
   // Get tasks by user story ID
-  getByStory: (storyId) => api.get('/tasks', {
-    params: { storyId },
+  getByStory: (storyId, params) => api.get('/tasks', {
+    params: { storyId, ...params },
   }),
   
   // Create new task
@@ -100,7 +113,9 @@ api.interceptors.response.use(
       // Return response with the nested data as the main data property
       return {
         ...response,
-        data: response.data.data
+        data: response.data.data,
+        meta: response.data.meta,
+        message: response.data.message,
       }
     }
     // For other response structures, return as-is

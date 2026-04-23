@@ -112,6 +112,7 @@ router.get('/', taskController.getTasksByStory)
  *         description: Task not found
  */
 router.patch('/:id', taskController.updateTask)
+router.put('/:id', taskController.updateTask)
 
 /**
  * @swagger

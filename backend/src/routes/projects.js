@@ -45,6 +45,47 @@ router.get('/', projectController.getAllProjects)
 
 /**
  * @swagger
+ * /projects/{id}/stories:
+ *   get:
+ *     summary: Get user stories for a project
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Todo, In Progress, Done]
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           type: string
+ *           enum: [Low, Medium, High]
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, updatedAt]
+ *     responses:
+ *       200:
+ *         description: User stories for the project
+ */
+router.get('/:id/stories', projectController.getProjectStories)
+
+/**
+ * @swagger
  * /projects/{id}:
  *   get:
  *     summary: Get project by ID with its user stories and tasks
@@ -94,6 +135,7 @@ router.get('/:id', projectController.getProjectById)
  *         description: Project not found
  */
 router.patch('/:id', projectController.updateProject)
+router.put('/:id', projectController.updateProject)
 
 /**
  * @swagger
