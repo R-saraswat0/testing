@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Briefcase, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { clearAuthSession } from '../services/api'
 
 export const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(true)
@@ -9,8 +10,7 @@ export const Sidebar = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearAuthSession()
     navigate('/login')
   }
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FormGroup, Input } from '../components/FormElements'
 import { Button } from '../components/Button'
-import axios from 'axios'
+import { authAPI, saveAuthSession } from '../services/api'
 
 export const Login = () => {
   const navigate = useNavigate()
@@ -19,14 +19,15 @@ export const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
+    setError('')
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/login`, formData)
-      const { token, user } = res.data.data
+      const res = await authAPI.login({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      })
 
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-
+      saveAuthSession(res.data)
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed')

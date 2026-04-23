@@ -2,97 +2,114 @@ import cron from 'node-cron'
 import prisma from '../utils/db.js'
 import { logger } from '../utils/logger.js'
 
+const REPORT_RETRY_ATTEMPTS = 3
+const REPORT_RETRY_DELAY_MS = 1000
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+export const generateDailyReport = async () => {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  yesterday.setHours(0, 0, 0, 0)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const completedTasks = await prisma.task.findMany({
+    where: {
+      status: 'Done',
+      updatedAt: {
+        gte: yesterday,
+        lt: today,
+      },
+    },
+    include: {
+      userStory: {
+        include: {
+          project: true,
+        },
+      },
+    },
+  })
+
+  const doneTasks = await prisma.task.findMany({
+    where: { status: 'Done' },
+    include: {
+      userStory: {
+        include: {
+          project: true,
+        },
+      },
+    },
+  })
+
+  const taskStats = await prisma.task.groupBy({
+    by: ['status'],
+    _count: {
+      id: true,
+    },
+  })
+
+  return {
+    timestamp: new Date().toISOString(),
+    completedTasksYesterday: completedTasks.length,
+    completedTasks,
+    tasksByPriority: {
+      high: doneTasks.filter(task => task.priority === 'High').length,
+      medium: doneTasks.filter(task => task.priority === 'Medium').length,
+      low: doneTasks.filter(task => task.priority === 'Low').length,
+    },
+    totalStats: taskStats,
+    summary: {
+      totalTasksCompletedYesterday: completedTasks.length,
+      totalDoneTasks: doneTasks.length,
+      averageDoneTasksPerDay: Math.round(doneTasks.length / 30),
+    },
+  }
+}
+
+const runWithRetry = async (work, attempts = REPORT_RETRY_ATTEMPTS) => {
+  let lastError
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await work()
+    } catch (error) {
+      lastError = error
+      logger.warn(`Daily report attempt ${attempt}/${attempts} failed: ${error.message}`)
+
+      if (attempt < attempts) {
+        await delay(REPORT_RETRY_DELAY_MS * attempt)
+      }
+    }
+  }
+
+  throw lastError
+}
+
 /**
- * Background job that runs daily at 00:00 (midnight)
- * Generates a report of completed tasks from the previous day
+ * Background job that runs daily at midnight.
+ * It summarizes completed work and logs the generated report.
  */
 export const startDailyReportJob = () => {
-  // Run every day at 00:00 (midnight)
   const job = cron.schedule('0 0 * * *', async () => {
     try {
-      logger.info('🔄 Daily report job started...')
+      logger.info('Daily report job started')
 
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      yesterday.setHours(0, 0, 0, 0)
+      const report = await runWithRetry(generateDailyReport)
 
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-
-      // Find completed tasks from yesterday
-      const completedTasks = await prisma.task.findMany({
-        where: {
-          status: 'Done',
-          updatedAt: {
-            gte: yesterday,
-            lt: today,
-          },
-        },
-        include: {
-          userStory: {
-            include: {
-              project: true,
-            },
-          },
-        },
-      })
-
-      // Find all done tasks by priority
-      const tasksByPriority = await prisma.task.findMany({
-        where: { status: 'Done' },
-        include: {
-          userStory: {
-            include: {
-              project: true,
-            },
-          },
-        },
-      })
-
-      // Count tasks by status
-      const taskStats = await prisma.task.groupBy({
-        by: ['status'],
-        _count: {
-          id: true,
-        },
-      })
-
-      // Generate report
-      const report = {
-        timestamp: new Date().toISOString(),
-        completedTasksYesterday: completedTasks.length,
-        completedTasks,
-        tasksByPriority: {
-          high: tasksByPriority.filter(t => t.priority === 'High').length,
-          medium: tasksByPriority.filter(t => t.priority === 'Medium').length,
-          low: tasksByPriority.filter(t => t.priority === 'Low').length,
-        },
-        totalStats: taskStats,
-        summary: {
-          totalTasksCompleted: completedTasks.length,
-          totalOverallTasks: tasksByPriority.length,
-          averageTasksPerDay: Math.round(tasksByPriority.length / 30),
-        },
-      }
-
-      logger.info('✅ Daily Report Generated:', JSON.stringify(report, null, 2))
-
-      // Optional: Save report to a file or database
-      // await saveReportToDatabase(report)
-
+      logger.info('Daily report generated', report)
       return report
     } catch (error) {
-      logger.error('❌ Daily report job failed:', error)
-      // Retry logic can be added here
-      throw error
+      logger.error('Daily report job failed after retries', error)
+      return null
     }
   })
 
-  logger.info('📅 Daily report job scheduled (runs at 00:00 every day)')
+  logger.info('Daily report job scheduled (runs at 00:00 every day)')
   return job
 }
 
-// Start the job when this module is imported
 startDailyReportJob()
 
 export default startDailyReportJob

@@ -9,6 +9,18 @@ const api = axios.create({
   },
 })
 
+export const saveAuthSession = ({ token, user }) => {
+  localStorage.setItem('token', token)
+  localStorage.setItem('user', JSON.stringify(user))
+  window.dispatchEvent(new Event('auth-change'))
+}
+
+export const clearAuthSession = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  window.dispatchEvent(new Event('auth-change'))
+}
+
 // ==================== Add JWT Token to Requests ====================
 api.interceptors.request.use(
   (config) => {
@@ -37,6 +49,13 @@ export const projectsAPI = {
   
   // Delete project
   delete: (id) => api.delete(`/projects/${id}`),
+}
+
+// ==================== Auth ====================
+export const authAPI = {
+  login: (data) => api.post('/auth/login', data),
+  register: (data) => api.post('/auth/register', data),
+  me: () => api.get('/auth/me'),
 }
 
 // ==================== User Stories ====================
@@ -88,6 +107,10 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
+    if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
+      clearAuthSession()
+    }
+
     if (error.response?.status === 404) {
       console.error('Resource not found:', error.response.data)
     } else if (error.response?.status === 400) {

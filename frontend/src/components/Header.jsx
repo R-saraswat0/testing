@@ -3,6 +3,7 @@ import { useApp } from '../hooks/useApp'
 import { useNavigate } from 'react-router-dom'
 import { Moon, Sun, Bell, Search, ChevronDown, User, LogOut } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { clearAuthSession } from '../services/api'
 
 export const Header = () => {
   const { darkMode, toggleDarkMode } = useApp()
@@ -11,8 +12,7 @@ export const Header = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearAuthSession()
     navigate('/login')
   }
 

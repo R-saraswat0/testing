@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import { Sidebar } from './components/Sidebar'
@@ -9,12 +9,6 @@ import { ProjectDetails } from './pages/ProjectDetails'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import './index.css'
-
-// Protected route component
-const ProtectedRoute = ({ element }) => {
-  const token = localStorage.getItem('token')
-  return token ? element : <Navigate to="/login" replace />
-}
 
 // Layout for authenticated pages
 function AppContent() {
@@ -37,7 +31,19 @@ function AppContent() {
 }
 
 function App() {
-  const token = localStorage.getItem('token')
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem('token')))
+
+  useEffect(() => {
+    const syncAuth = () => setIsAuthenticated(Boolean(localStorage.getItem('token')))
+
+    window.addEventListener('auth-change', syncAuth)
+    window.addEventListener('storage', syncAuth)
+
+    return () => {
+      window.removeEventListener('auth-change', syncAuth)
+      window.removeEventListener('storage', syncAuth)
+    }
+  }, [])
 
   return (
     <Router>
@@ -50,7 +56,7 @@ function App() {
           {/* Protected routes */}
           <Route
             path="/*"
-            element={token ? <AppContent /> : <Navigate to="/login" replace />}
+            element={isAuthenticated ? <AppContent /> : <Navigate to="/login" replace />}
           />
         </Routes>
       </AppProvider>

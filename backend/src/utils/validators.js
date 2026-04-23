@@ -48,6 +48,33 @@ export const validateTask = (data) => {
   return value
 }
 
+export const validateRegister = (data) => {
+  const schema = Joi.object({
+    name: Joi.string().trim().min(2).max(100).required(),
+    email: Joi.string().trim().lowercase().email().required(),
+    password: Joi.string().min(6).max(128).required(),
+  })
+
+  const { error, value } = schema.validate(data)
+  if (error) {
+    throw new AppError(error.details[0].message, 400)
+  }
+  return value
+}
+
+export const validateLogin = (data) => {
+  const schema = Joi.object({
+    email: Joi.string().trim().lowercase().email().required(),
+    password: Joi.string().required(),
+  })
+
+  const { error, value } = schema.validate(data)
+  if (error) {
+    throw new AppError(error.details[0].message, 400)
+  }
+  return value
+}
+
 export const validateId = (id) => {
   const schema = Joi.number().integer().positive().required()
   const { error, value } = schema.validate(id)

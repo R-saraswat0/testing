@@ -2,12 +2,13 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../utils/db.js'
 import { logger } from '../utils/logger.js'
+import { validateLogin, validateRegister } from '../utils/validators.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
 export const register = async (req, res) => {
   try {
-    const { email, password, name } = req.body
+    const { email, password, name } = validateRegister(req.body)
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { email } })
@@ -36,13 +37,13 @@ export const register = async (req, res) => {
     })
   } catch (error) {
     logger.error(`Registration error: ${error.message}`)
-    res.status(500).json({ success: false, message: error.message })
+    res.status(error.status || 500).json({ success: false, message: error.message })
   }
 }
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password } = validateLogin(req.body)
 
     // Find user
     const user = await prisma.user.findUnique({ where: { email } })
@@ -72,7 +73,7 @@ export const login = async (req, res) => {
     })
   } catch (error) {
     logger.error(`Login error: ${error.message}`)
-    res.status(500).json({ success: false, message: error.message })
+    res.status(error.status || 500).json({ success: false, message: error.message })
   }
 }
 

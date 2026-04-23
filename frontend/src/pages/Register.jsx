@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FormGroup, Input } from '../components/FormElements'
 import { Button } from '../components/Button'
-import axios from 'axios'
+import { authAPI, saveAuthSession } from '../services/api'
 
 export const Register = () => {
   const navigate = useNavigate()
@@ -25,19 +25,16 @@ export const Register = () => {
     }
 
     setIsLoading(true)
+    setError('')
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
-        name: formData.name,
-        email: formData.email,
+      const res = await authAPI.register({
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
         password: formData.password
       })
 
-      const { token, user } = res.data.data
-
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-
+      saveAuthSession(res.data)
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed')
