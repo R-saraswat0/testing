@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Briefcase, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { LayoutDashboard, Briefcase, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { clearAuthSession } from '../services/api'
 
 export const Sidebar = () => {
@@ -16,22 +16,11 @@ export const Sidebar = () => {
 
   const getUserInitials = () => {
     if (!user.name) return 'U'
-    return user.name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
+    return user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   }
 
   const menuItems = [
     { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard' },
-    { label: 'Projects', icon: Briefcase, to: '/projects' },
-  ]
-
-  const bottomItems = [
-    { label: 'Settings', icon: Settings, to: '/settings' },
-    { label: 'Logout', icon: LogOut, onClick: handleLogout },
   ]
 
   return (
@@ -55,7 +44,7 @@ export const Sidebar = () => {
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } transition-transform lg:transition-none`}
       >
-        {/* Logo Section */}
+        {/* Logo */}
         <motion.div
           whileHover={{ scale: 1.02 }}
           className="p-6 border-b border-gray-200 dark:border-slate-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20"
@@ -64,7 +53,7 @@ export const Sidebar = () => {
             <motion.div
               whileHover={{ rotate: 360 }}
               transition={{ duration: 0.5 }}
-              className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg transition-shadow"
+              className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center shadow-md"
             >
               <Briefcase className="w-6 h-6 text-white" />
             </motion.div>
@@ -77,7 +66,7 @@ export const Sidebar = () => {
           </NavLink>
         </motion.div>
 
-        {/* Main Menu */}
+        {/* Nav */}
         <nav className="flex-1 p-4 space-y-2">
           {menuItems.map((item, idx) => (
             <motion.div
@@ -105,25 +94,22 @@ export const Sidebar = () => {
           ))}
         </nav>
 
-        {/* Bottom Menu */}
-        <div className="p-4 border-t border-gray-200 dark:border-slate-800 space-y-2">
-          {bottomItems.map((item, idx) => (
-            <motion.button
-              key={item.label}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 + idx * 0.1 }}
-              onClick={item.onClick}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all duration-200 group"
-            >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
-              <span>{item.label}</span>
-              <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-            </motion.button>
-          ))}
+        {/* Logout */}
+        <div className="p-4 border-t border-gray-200 dark:border-slate-800">
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200 group"
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            <span>Logout</span>
+            <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+          </motion.button>
         </div>
 
-        {/* User Section */}
+        {/* User */}
         <motion.div
           whileHover={{ scale: 1.02 }}
           className="p-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50"
@@ -137,7 +123,7 @@ export const Sidebar = () => {
             </motion.div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user.name || 'User'}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email || 'email@example.com'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email || ''}</p>
             </div>
           </div>
         </motion.div>
