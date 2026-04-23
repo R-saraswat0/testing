@@ -15,7 +15,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GripVertical, Plus, User } from 'lucide-react'
 import { KanbanColumn } from './KanbanColumn'
 import { KanbanTask } from './KanbanTask'
 
@@ -34,12 +33,8 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] },
   }, [tasks])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      distance: 8,
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { distance: 8 }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
   const columns = [
@@ -48,38 +43,22 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] },
     { id: 'done', title: 'Done', color: 'bg-green-100 dark:bg-green-900/20', count: items.done?.length || 0 },
   ]
 
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id)
-  }
-
-  const handleDragCancel = () => {
-    setActiveId(null)
-  }
+  const handleDragStart = (event) => setActiveId(event.active.id)
+  const handleDragCancel = () => setActiveId(null)
 
   const handleDragEnd = (event) => {
     const { active, over } = event
+    if (!over) { setActiveId(null); return }
 
-    if (!over) {
-      setActiveId(null)
-      return
-    }
-
-    const activeStatus = Object.keys(items).find(key =>
-      items[key].some(item => item.id === active.id)
-    )
-    const overStatus = Object.keys(items).find(key =>
-      items[key].some(item => item.id === over.id)
-    ) || over.id
+    const activeStatus = Object.keys(items).find(key => items[key].some(item => item.id === active.id))
+    const overStatus = Object.keys(items).find(key => items[key].some(item => item.id === over.id)) || over.id
 
     if (activeStatus && overStatus) {
       const activeIndex = items[activeStatus].findIndex(item => item.id === active.id)
       const overIndex = items[overStatus].findIndex(item => item.id === over.id)
 
       if (activeStatus === overStatus) {
-        setItems({
-          ...items,
-          [activeStatus]: arrayMove(items[activeStatus], activeIndex, overIndex),
-        })
+        setItems({ ...items, [activeStatus]: arrayMove(items[activeStatus], activeIndex, overIndex) })
       } else {
         const previousItems = items
         const newItems = JSON.parse(JSON.stringify(items))
@@ -87,21 +66,13 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] },
         movedItem.status = statusByColumn[overStatus]
         newItems[overStatus].splice(overIndex, 0, movedItem)
         setItems(newItems)
-
         if (onTaskStatusChange) {
           onTaskStatusChange(movedItem.id, statusByColumn[overStatus])
             .catch(() => setItems(previousItems))
         }
       }
     }
-
     setActiveId(null)
-  }
-
-  const findTaskStatus = (taskId) => {
-    return Object.keys(items).find(key =>
-      items[key].some(item => item.id === taskId)
-    )
   }
 
   const findTask = (taskId) => {
@@ -133,6 +104,7 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] },
               <KanbanColumn
                 column={column}
                 tasks={items[column.id] || []}
+                onTaskStatusChange={onTaskStatusChange}
               />
             </motion.div>
           ))}
@@ -140,12 +112,7 @@ export const KanbanBoard = ({ tasks = { todo: [], 'in-progress': [], done: [] },
       </div>
 
       <DragOverlay>
-        {activeId && (
-          <KanbanTask
-            task={findTask(activeId)}
-            isDragging
-          />
-        )}
+        {activeId && <KanbanTask task={findTask(activeId)} isDragging />}
       </DragOverlay>
     </DndContext>
   )

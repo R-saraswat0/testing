@@ -2,19 +2,13 @@ import React from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, GripVertical } from 'lucide-react'
 import { KanbanTask } from './KanbanTask'
 
-export const KanbanColumn = ({ column, tasks = [] }) => {
-  const { setNodeRef } = useDroppable({
-    id: column.id,
-  })
+export const KanbanColumn = ({ column, tasks = [], onTaskStatusChange }) => {
+  const { setNodeRef } = useDroppable({ id: column.id })
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`${column.color} rounded-lg p-4 min-h-96 flex flex-col`}
-    >
+    <div ref={setNodeRef} className={`${column.color} rounded-lg p-4 min-h-96 flex flex-col`}>
       {/* Column Header */}
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-300 dark:border-slate-700">
         <div className="flex items-center gap-2">
@@ -23,21 +17,10 @@ export const KanbanColumn = ({ column, tasks = [] }) => {
             {column.count}
           </span>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          className="p-2 text-gray-500 hover:bg-white hover:bg-opacity-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
-          title="Add task"
-        >
-          <Plus className="w-4 h-4" />
-        </motion.button>
       </div>
 
       {/* Tasks List */}
-      <SortableContext
-        items={tasks.map(task => task.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
         <div className="flex-1 space-y-2 overflow-y-auto">
           <AnimatePresence>
             {tasks && tasks.length > 0 ? (
@@ -49,7 +32,7 @@ export const KanbanColumn = ({ column, tasks = [] }) => {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  <KanbanTask task={task} />
+                  <KanbanTask task={task} onTaskStatusChange={onTaskStatusChange} />
                 </motion.div>
               ))
             ) : (

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit2, Trash2, ChevronDown, LayoutGrid, List as ListIcon } from 'lucide-react'
+import { ArrowLeft, Plus, Edit2, Trash2, ChevronDown, LayoutGrid, List as ListIcon, CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useApp } from '../hooks/useApp'
 import { projectsAPI, userStoriesAPI, tasksAPI } from '../services/api'
-import { Card, CardBody, CardHeader, ActionButtons } from '../components/Card'
+import { Card, CardBody } from '../components/Card'
 import { Button, SecondaryButton } from '../components/Button'
 import { Modal } from '../components/Modal'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
@@ -16,6 +16,31 @@ import { EmptyState } from '../components/EmptyState'
 import { CardSkeleton } from '../components/SkeletonLoaders'
 import { format } from 'date-fns'
 
+// Cycles: Todo → In Progress → Done
+const nextStatus = { 'Todo': 'In Progress', 'In Progress': 'Done', 'Done': 'Done' }
+
+const StatusCycleButton = ({ status, onClick, disabled }) => {
+  const isDone = status === 'Done'
+  const isInProgress = status === 'In Progress'
+  const Icon = isDone ? CheckCircle2 : isInProgress ? Loader2 : Circle
+  const color = isDone
+    ? 'text-green-500 cursor-default'
+    : isInProgress
+    ? 'text-blue-500 hover:text-green-500'
+    : 'text-gray-400 hover:text-blue-500'
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isDone || disabled}
+      title={isDone ? 'Completed' : `Mark as ${nextStatus[status]}`}
+      className={`flex-shrink-0 transition-colors ${color}`}
+    >
+      <Icon className="w-5 h-5" />
+    </button>
+  )
+}
+
 export const ProjectDetails = () => {
   const { projectId } = useParams()
   const navigate = useNavigate()
@@ -25,10 +50,11 @@ export const ProjectDetails = () => {
   const [stories, setStories] = useState([])
   const [tasks, setTasks] = useState({})
   const [expandedStories, setExpandedStories] = useState(new Set())
-  const [viewMode, setViewMode] = useState('list') // 'list' or 'kanban'
+  const [viewMode, setViewMode] = useState('list')
   const [loadError, setLoadError] = useState('')
+  const [advancingTask, setAdvancingTask] = useState(null)
+  const [advancingStory, setAdvancingStory] = useState(null)
 
-  // Modals
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showStoryModal, setShowStoryModal] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -37,9 +63,7 @@ export const ProjectDetails = () => {
   const [editingTask, setEditingTask] = useState(null)
   const [selectedStoryId, setSelectedStoryId] = useState(null)
 
-  useEffect(() => {
-    fetchProjectData()
-  }, [projectId])
+  useEffect(() => { fetchProjectData() }, [projectId])
 
   const fetchProjectData = async () => {
     try {
@@ -52,7 +76,6 @@ export const ProjectDetails = () => {
       setProject(projectRes.data)
       setStories(storiesRes.data || [])
 
-      // Fetch tasks for all stories
       const allTasks = {}
       await Promise.all(
         (storiesRes.data || []).map(story =>
@@ -71,6 +94,91 @@ export const ProjectDetails = () => {
     }
   }
 
+  // ── Completion logging ──────────────────────────────────────────────────────
+  const logCompletion = (type, item) => {
+    console.info(`[COMPLETED] ${type}:`, {
+      id: item.id,
+      title: item.name || item.title,
+      completedAt: new Date().toISOString(),
+    })
+  }
+
+  // ── Task status advance ─────────────────────────────────────────────────────
+  const handleTaskStatusChange = async (taskId, status) => {
+    try {
+      await tasksAPI.update(taskId, { status })
+      if (status === 'Done') {
+        const task = Object.values(tasks).flat().find(t => t.id === taskId)
+        if (task) logCompletion('Task', task)
+        showSuccess('Task marked as Done ✓')
+      } else {
+        showSuccess('Task status updated')
+      }
+      fetchProjectData()
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to update task status')
+      throw error
+    }
+  }
+
+  const handleAdvanceTask = async (task) => {
+    if (task.status === 'Done' || advancingTask === task.id) return
+    setAdvancingTask(task.id)
+    try {
+      await handleTaskStatusChange(task.id, nextStatus[task.status])
+    } finally {
+      setAdvancingTask(null)
+    }
+  }
+
+  // ── Story status advance ────────────────────────────────────────────────────
+  const handleAdvanceStory = async (story) => {
+    if (story.status === 'Done' || advancingStory === story.id) return
+    setAdvancingStory(story.id)
+    try {
+      const newStatus = nextStatus[story.status]
+      await userStoriesAPI.update(story.id, { status: newStatus })
+      if (newStatus === 'Done') {
+        logCompletion('User Story', story)
+        showSuccess('Story marked as Done ✓')
+      } else {
+        showSuccess('Story moved to In Progress')
+      }
+      fetchProjectData()
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to update story status')
+    } finally {
+      setAdvancingStory(null)
+    }
+  }
+
+  // ── Project complete ────────────────────────────────────────────────────────
+  const handleCompleteProject = async () => {
+    if (!window.confirm('Mark this entire project as complete? All stories and tasks will be set to Done.')) return
+    try {
+      setLoading(true)
+      // Mark all stories and their tasks Done
+      await Promise.all(
+        stories.map(async (story) => {
+          await userStoriesAPI.update(story.id, { status: 'Done' })
+          await Promise.all(
+            (tasks[story.id] || []).map(task =>
+              task.status !== 'Done' ? tasksAPI.update(task.id, { status: 'Done' }) : Promise.resolve()
+            )
+          )
+        })
+      )
+      logCompletion('Project', project)
+      showSuccess('Project completed! All stories and tasks marked as Done ✓')
+      fetchProjectData()
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to complete project')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── CRUD handlers ───────────────────────────────────────────────────────────
   const handleUpdateProject = async (formData) => {
     try {
       setLoading(true)
@@ -190,39 +298,16 @@ export const ProjectDetails = () => {
 
   const toggleStory = (storyId) => {
     const newExpanded = new Set(expandedStories)
-    if (newExpanded.has(storyId)) {
-      newExpanded.delete(storyId)
-    } else {
-      newExpanded.add(storyId)
-    }
+    if (newExpanded.has(storyId)) newExpanded.delete(storyId)
+    else newExpanded.add(storyId)
     setExpandedStories(newExpanded)
-  }
-
-  const handleTaskStatusChange = async (taskId, status) => {
-    try {
-      await tasksAPI.update(taskId, { status })
-      showSuccess('Task status updated')
-      fetchProjectData()
-    } catch (error) {
-      showError(error.response?.data?.message || 'Failed to update task status')
-      throw error
-    }
   }
 
   if (!project) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="space-y-4"
-      >
-        {[1, 2, 3].map((i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: i * 0.1 }}
-          >
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+        {[1, 2, 3].map(i => (
+          <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }}>
             <CardSkeleton />
           </motion.div>
         ))}
@@ -230,13 +315,12 @@ export const ProjectDetails = () => {
     )
   }
 
-  // Calculate stats
   const totalStories = stories.length
   const totalTasks = Object.values(tasks).reduce((sum, arr) => sum + (arr?.length || 0), 0)
   const completedStories = stories.filter(s => s.status === 'Done').length
   const inProgressStories = stories.filter(s => s.status === 'In Progress').length
+  const allDone = totalStories > 0 && completedStories === totalStories
 
-  // Prepare tasks for Kanban view
   const kanbanTasks = {
     todo: Object.values(tasks).flat().filter(t => t.status === 'Todo'),
     'in-progress': Object.values(tasks).flat().filter(t => t.status === 'In Progress'),
@@ -245,13 +329,13 @@ export const ProjectDetails = () => {
 
   return (
     <motion.div className="space-y-6">
-      {/* Header with Back Button */}
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
           {loadError}
         </div>
       )}
 
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -267,34 +351,34 @@ export const ProjectDetails = () => {
           <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
         </motion.button>
         <div className="flex-1">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">{project.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">{project.name}</h1>
+            {allDone && (
+              <span className="flex items-center gap-1 text-sm font-semibold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full">
+                <CheckCircle2 className="w-4 h-4" /> Completed
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{project.description}</p>
         </div>
         <div className="flex gap-2">
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          {!allDone && (
             <Button
               variant="outline"
               size="sm"
-              icon={Edit2}
-              onClick={() => {
-                setEditingProject(project)
-                setShowProjectModal(true)
-              }}
-              className="dark:border-slate-600 dark:text-gray-300"
+              icon={CheckCircle2}
+              onClick={handleCompleteProject}
+              className="border-green-500 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400"
             >
-              Edit
+              Complete Project
             </Button>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              variant="danger"
-              size="sm"
-              icon={Trash2}
-              onClick={handleDeleteProject}
-            >
-              Delete
-            </Button>
-          </motion.div>
+          )}
+          <Button variant="outline" size="sm" icon={Edit2} onClick={() => { setEditingProject(project); setShowProjectModal(true) }}>
+            Edit
+          </Button>
+          <Button variant="danger" size="sm" icon={Trash2} onClick={handleDeleteProject}>
+            Delete
+          </Button>
         </div>
       </motion.div>
 
@@ -308,15 +392,10 @@ export const ProjectDetails = () => {
         {[
           { label: 'Total Stories', value: totalStories, icon: '📋' },
           { label: 'In Progress', value: inProgressStories, icon: '⚡' },
-          { label: 'Completed', value: completedStories, icon: '✅' },
+          { label: 'Completed Stories', value: completedStories, icon: '✅' },
           { label: 'Total Tasks', value: totalTasks, icon: '✓' },
         ].map((stat, idx) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 + idx * 0.05 }}
-          >
+          <motion.div key={stat.label} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 + idx * 0.05 }}>
             <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700">
               <div className="text-2xl mb-1">{stat.icon}</div>
               <p className="text-xs text-gray-600 dark:text-gray-400">{stat.label}</p>
@@ -326,61 +405,32 @@ export const ProjectDetails = () => {
         ))}
       </motion.div>
 
-      {/* View Mode Toggle & Add Story Button */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="flex items-center justify-between"
-      >
+      {/* View Toggle & Add Story */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex items-center justify-between">
         <div className="flex gap-2 bg-gray-100 dark:bg-slate-800 rounded-lg p-1">
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => setViewMode('list')}
-            className={`px-3 py-2 rounded transition-all ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400'
-            }`}
+            className={`px-3 py-2 rounded transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
           >
             <ListIcon className="w-4 h-4" />
           </motion.button>
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => setViewMode('kanban')}
-            className={`px-3 py-2 rounded transition-all ${
-              viewMode === 'kanban'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400'
-            }`}
+            className={`px-3 py-2 rounded transition-all ${viewMode === 'kanban' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-600 dark:text-gray-400'}`}
           >
             <LayoutGrid className="w-4 h-4" />
           </motion.button>
         </div>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            size="sm"
-            icon={Plus}
-            onClick={() => {
-              setEditingStory(null)
-              setShowStoryModal(true)
-            }}
-          >
-            Add Story
-          </Button>
-        </motion.div>
+        <Button size="sm" icon={Plus} onClick={() => { setEditingStory(null); setShowStoryModal(true) }}>
+          Add Story
+        </Button>
       </motion.div>
 
-      {/* Stories Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
+      {/* Stories / Kanban */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         {viewMode === 'list' ? (
-          // List View
           <div className="space-y-2">
             {stories.length === 0 ? (
               <EmptyState
@@ -401,52 +451,55 @@ export const ProjectDetails = () => {
                     transition={{ delay: idx * 0.05 }}
                   >
                     <Card className="hover:shadow-md transition-shadow dark:hover:shadow-lg">
-                      <motion.div
-                        className="px-6 py-4 flex items-center gap-4 cursor-pointer"
-                        onClick={() => toggleStory(story.id)}
-                        whileHover={{ paddingLeft: 28 }}
-                      >
-                        <motion.div
-                          animate={{ rotate: expandedStories.has(story.id) ? 180 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
-                        </motion.div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-white">{story.title}</h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">{story.description}</p>
-                        </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <StatusBadge status={story.status} />
-                          <PriorityBadge priority={story.priority} />
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex gap-1 opacity-0 hover:opacity-100 transition-opacity"
-                          >
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
-                              onClick={() => {
-                                setEditingStory(story)
-                                setShowStoryModal(true)
-                              }}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
-                              onClick={() => handleDeleteStory(story.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
-                          </div>
-                        </div>
-                      </motion.div>
+                      {/* Story row */}
+                      <div className="px-6 py-4 flex items-center gap-3">
+                        {/* Status cycle button */}
+                        <StatusCycleButton
+                          status={story.status}
+                          disabled={advancingStory === story.id}
+                          onClick={(e) => { e.stopPropagation(); handleAdvanceStory(story) }}
+                        />
 
-                      {/* Expanded Tasks Section */}
+                        {/* Expand toggle */}
+                        <motion.div
+                          className="flex-1 flex items-center gap-4 cursor-pointer"
+                          onClick={() => toggleStory(story.id)}
+                        >
+                          <motion.div animate={{ rotate: expandedStories.has(story.id) ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          </motion.div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`font-semibold ${story.status === 'Done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+                              {story.title}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">{story.description}</p>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <StatusBadge status={story.status} />
+                            <PriorityBadge priority={story.priority} />
+                          </div>
+                        </motion.div>
+
+                        {/* Edit / Delete */}
+                        <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                            onClick={() => { setEditingStory(story); setShowStoryModal(true) }}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                            onClick={() => handleDeleteStory(story.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                      </div>
+
+                      {/* Expanded tasks */}
                       <AnimatePresence>
                         {expandedStories.has(story.id) && (
                           <motion.div
@@ -461,25 +514,16 @@ export const ProjectDetails = () => {
                                 Tasks ({tasks[story.id]?.length || 0})
                               </h4>
                               <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 font-medium"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setSelectedStoryId(story.id)
-                                  setEditingTask(null)
-                                  setShowTaskModal(true)
-                                }}
+                                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 font-medium"
+                                onClick={(e) => { e.stopPropagation(); setSelectedStoryId(story.id); setEditingTask(null); setShowTaskModal(true) }}
                               >
-                                <Plus className="w-4 h-4" />
-                                Add Task
+                                <Plus className="w-4 h-4" /> Add Task
                               </motion.button>
                             </div>
 
                             {tasks[story.id]?.length === 0 ? (
-                              <p className="text-sm text-gray-600 dark:text-gray-400 py-4 text-center">
-                                No tasks yet. Add one to get started!
-                              </p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 py-4 text-center">No tasks yet. Add one to get started!</p>
                             ) : (
                               <div className="space-y-2">
                                 <AnimatePresence>
@@ -493,36 +537,37 @@ export const ProjectDetails = () => {
                                     >
                                       <Card className="bg-white dark:bg-slate-800 hover:shadow-sm transition-shadow">
                                         <CardBody>
-                                          <div className="flex items-start justify-between gap-4">
+                                          <div className="flex items-start gap-3">
+                                            {/* Task status cycle button */}
+                                            <StatusCycleButton
+                                              status={task.status}
+                                              disabled={advancingTask === task.id}
+                                              onClick={() => handleAdvanceTask(task)}
+                                            />
+
                                             <div className="flex-1 min-w-0">
-                                              <p className="font-medium text-gray-900 dark:text-white">{task.title}</p>
+                                              <p className={`font-medium ${task.status === 'Done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+                                                {task.title}
+                                              </p>
                                               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{task.description}</p>
                                               <div className="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                                {task.assignedTo && (
-                                                  <span>{task.assignedTo}</span>
-                                                )}
-                                                {task.dueDate && (
-                                                  <span>{format(new Date(task.dueDate), 'MMM d')}</span>
-                                                )}
+                                                {task.assignedTo && <span>{task.assignedTo}</span>}
+                                                {task.dueDate && <span>{format(new Date(task.dueDate), 'MMM d')}</span>}
                                               </div>
                                             </div>
+
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                               <StatusBadge status={task.status} />
-                                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <div className="flex gap-1">
                                                 <motion.button
-                                                  whileHover={{ scale: 1.1 }}
-                                                  whileTap={{ scale: 0.95 }}
+                                                  whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
                                                   className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                                                  onClick={() => {
-                                                    setEditingTask(task)
-                                                    setShowTaskModal(true)
-                                                  }}
+                                                  onClick={() => { setEditingTask(task); setShowTaskModal(true) }}
                                                 >
                                                   <Edit2 className="w-3.5 h-3.5" />
                                                 </motion.button>
                                                 <motion.button
-                                                  whileHover={{ scale: 1.1 }}
-                                                  whileTap={{ scale: 0.95 }}
+                                                  whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
                                                   className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
                                                   onClick={() => handleDeleteTask(task.id)}
                                                 >
@@ -548,7 +593,6 @@ export const ProjectDetails = () => {
             )}
           </div>
         ) : (
-          // Kanban View
           <div className="overflow-x-auto -mx-6 px-6">
             {totalTasks === 0 ? (
               <EmptyState
@@ -564,67 +608,17 @@ export const ProjectDetails = () => {
         )}
       </motion.div>
 
-      {/* Project Modal */}
-      <Modal
-        isOpen={showProjectModal}
-        onClose={() => {
-          setShowProjectModal(false)
-          setEditingProject(null)
-        }}
-        title="Edit Project"
-        size="lg"
-      >
-        <ProjectForm
-          initialData={editingProject}
-          onSubmit={handleUpdateProject}
-          onCancel={() => {
-            setShowProjectModal(false)
-            setEditingProject(null)
-          }}
-          isLoading={loading}
-        />
+      {/* Modals */}
+      <Modal isOpen={showProjectModal} onClose={() => { setShowProjectModal(false); setEditingProject(null) }} title="Edit Project" size="lg">
+        <ProjectForm initialData={editingProject} onSubmit={handleUpdateProject} onCancel={() => { setShowProjectModal(false); setEditingProject(null) }} isLoading={loading} />
       </Modal>
 
-      {/* Story Modal */}
-      <Modal
-        isOpen={showStoryModal}
-        onClose={() => {
-          setShowStoryModal(false)
-          setEditingStory(null)
-        }}
-        title={editingStory ? 'Edit User Story' : 'Create User Story'}
-        size="lg"
-      >
-        <UserStoryForm
-          initialData={editingStory}
-          onSubmit={editingStory ? handleUpdateStory : handleCreateStory}
-          onCancel={() => {
-            setShowStoryModal(false)
-            setEditingStory(null)
-          }}
-          isLoading={loading}
-        />
+      <Modal isOpen={showStoryModal} onClose={() => { setShowStoryModal(false); setEditingStory(null) }} title={editingStory ? 'Edit User Story' : 'Create User Story'} size="lg">
+        <UserStoryForm initialData={editingStory} onSubmit={editingStory ? handleUpdateStory : handleCreateStory} onCancel={() => { setShowStoryModal(false); setEditingStory(null) }} isLoading={loading} />
       </Modal>
 
-      {/* Task Modal */}
-      <Modal
-        isOpen={showTaskModal}
-        onClose={() => {
-          setShowTaskModal(false)
-          setEditingTask(null)
-        }}
-        title={editingTask ? 'Edit Task' : 'Create Task'}
-        size="lg"
-      >
-        <TaskForm
-          initialData={editingTask}
-          onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
-          onCancel={() => {
-            setShowTaskModal(false)
-            setEditingTask(null)
-          }}
-          isLoading={loading}
-        />
+      <Modal isOpen={showTaskModal} onClose={() => { setShowTaskModal(false); setEditingTask(null) }} title={editingTask ? 'Edit Task' : 'Create Task'} size="lg">
+        <TaskForm initialData={editingTask} onSubmit={editingTask ? handleUpdateTask : handleCreateTask} onCancel={() => { setShowTaskModal(false); setEditingTask(null) }} isLoading={loading} />
       </Modal>
     </motion.div>
   )
